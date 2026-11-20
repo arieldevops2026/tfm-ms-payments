@@ -1,0 +1,255 @@
+openapi: 3.0.3
+info:
+  title: Payments Service
+  description: Microservicio de pagos simulados del laboratorio experimental (TFM GitOps con entrega progresiva gobernada por SLO). No procesa pagos reales.
+  version: 1.0.0
+  contact:
+    name: Ariel Vazquez
+
+paths:
+  /api/v1/payments/authorize:
+    post:
+      tags:
+        - Pagos
+      summary: Autorizar un pago simulado
+      description: |-
+        Autoriza un pago simulado asociado a una orden.
+        El pago se aprueba si el importe no supera el monto maximo configurado (payment.max-amount).
+        En caso contrario se rechaza con el motivo AMOUNT_LIMIT_EXCEEDED.
+      operationId: authorizePayment
+      parameters:
+        - $ref: '#/components/parameters/sessionId'
+        - $ref: '#/components/parameters/username'
+        - $ref: '#/components/parameters/clientIp'
+        - $ref: '#/components/parameters/channel'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthorizePaymentRequest'
+            examples:
+              pago-aprobado:
+                summary: Pago dentro del limite
+                value:
+                  orderId: "ORD-0001"
+                  customerId: "CUS-001"
+                  amount:
+                    currency: "USD"
+                    amount: 925.50
+                  paymentMethod: "CARD"
+              pago-rechazado:
+                summary: Pago que supera el limite
+                value:
+                  orderId: "ORD-0002"
+                  customerId: "CUS-001"
+                  amount:
+                    currency: "USD"
+                    amount: 9000.00
+                  paymentMethod: "CARD"
+      responses:
+        '200':
+          description: Pago procesado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+              examples:
+                aprobado:
+                  summary: Pago aprobado
+                  value:
+                    paymentId: "5f0c1e0e-8c3a-4e5b-9d57-1c7c2d2a9a10"
+                    orderId: "ORD-0001"
+                    customerId: "CUS-001"
+                    amount:
+                      currency: "USD"
+                      amount: 925.50
+                    paymentMethod: "CARD"
+                    status: "APPROVED"
+                    processedAt: "2026-11-14T16:00:00Z"
+                rechazado:
+                  summary: Pago rechazado
+                  value:
+                    paymentId: "7a2d9b44-3f1e-4a60-8f33-0b6e5c9d1e21"
+                    orderId: "ORD-0002"
+                    customerId: "CUS-001"
+                    amount:
+                      currency: "USD"
+                      amount: 9000.00
+                    paymentMethod: "CARD"
+                    status: "REJECTED"
+                    reason: "AMOUNT_LIMIT_EXCEEDED"
+                    processedAt: "2026-11-14T16:00:00Z"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/v1/payments/get-by-id/{id}:
+    get:
+      tags:
+        - Pagos
+      summary: Obtener un pago por su id
+      description: Retorna el detalle de un pago simulado.
+      operationId: getPaymentById
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Identificador del pago
+          schema:
+            type: string
+            example: "5f0c1e0e-8c3a-4e5b-9d57-1c7c2d2a9a10"
+        - $ref: '#/components/parameters/sessionId'
+        - $ref: '#/components/parameters/username'
+        - $ref: '#/components/parameters/clientIp'
+        - $ref: '#/components/parameters/channel'
+      responses:
+        '200':
+          description: Pago obtenido exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  parameters:
+    sessionId:
+      name: session-id
+      in: header
+      required: false
+      description: UUID de la sesion. Si no se envia, el servicio genera uno.
+      schema:
+        type: string
+        format: uuid
+        example: "123e4567-e89b-12d3-a456-426614174000"
+
+    username:
+      name: username
+      in: header
+      required: false
+      description: Nombre del usuario
+      schema:
+        type: string
+        example: "USRTFM"
+
+    clientIp:
+      name: client-ip
+      in: header
+      required: false
+      description: Direccion IP del cliente
+      schema:
+        type: string
+        example: "192.168.1.100"
+
+    channel:
+      name: channel
+      in: header
+      required: false
+      description: Canal de origen de la peticion
+      schema:
+        type: string
+        example: "LOADGEN"
+
+  schemas:
+    AuthorizePaymentRequest:
+      type: object
+      required:
+        - orderId
+        - customerId
+        - amount
+        - paymentMethod
+      properties:
+        orderId:
+          type: string
+          description: Identificador de la orden a pagar
+          example: "ORD-0001"
+        customerId:
+          type: string
+          description: Identificador del cliente
+          example: "CUS-001"
+        amount:
+          $ref: '#/components/schemas/AmountObj'
+        paymentMethod:
+          type: string
+          description: Medio de pago
+          example: "CARD"
+
+    Payment:
+      type: object
+      properties:
+        paymentId:
+          type: string
+          description: Identificador del pago
+        orderId:
+          type: string
+          description: Identificador de la orden
+        customerId:
+          type: string
+          description: Identificador del cliente
+        amount:
+          $ref: '#/components/schemas/AmountObj'
+        paymentMethod:
+          type: string
+          description: Medio de pago
+        status:
+          type: string
+          description: Estado del pago
+          enum: [APPROVED, REJECTED]
+        reason:
+          type: string
+          description: Motivo del rechazo (solo cuando el estado es REJECTED)
+          example: "AMOUNT_LIMIT_EXCEEDED"
+        processedAt:
+          type: string
+          format: date-time
+          description: Fecha y hora de procesamiento
+
+    AmountObj:
+      type: object
+      required:
+        - currency
+        - amount
+      properties:
+        currency:
+          type: string
+          example: "USD"
+        amount:
+          type: number
+          minimum: 0.01
+          example: 925.50
+
+    ErrorResponse:
+      type: object
+      properties:
+        title:
+          type: string
+        status:
+          type: integer
+        violations:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+
+  responses:
+    BadRequest:
+      description: Peticion invalida
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+    NotFound:
+      description: Recurso no encontrado
+
+    InternalServerError:
+      description: Error interno del servidor
